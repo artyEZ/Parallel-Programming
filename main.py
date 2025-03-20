@@ -2,61 +2,71 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import os
+import csv
 
 
 def read_matrix_from_file(filepath):
     with open(filepath, 'r') as file:
-        _size = int(file.readline())
-        matrix = np.loadtxt(file, dtype=int, max_rows=_size)
+        size = int(file.readline())
+        matrix = np.loadtxt(file, dtype=int, max_rows=size)
     return matrix
 
 
-def extract_execution_time(filepath):
-    with open(filepath, 'r') as file:
-        lines = file.readlines()
-        time_line = lines[-2].strip()
-        execution_time = float(time_line.split(": ")[1].split(" ")[0])
-    return execution_time
+def verify_results(cpp_result, python_result):
+    return np.allclose(cpp_result, python_result, atol=1e-6)
 
 
 if __name__ == "__main__":
-
     save_path = "C:/Users/artyo/Desktop/Учеба/Параллельное программирование/Lab1"
-
-    sizes = [10, 100, 1000]
+    sizes = [10, 50, 100, 200, 500, 1000]
+    results = []
 
     for size in sizes:
         matrixA_path = os.path.join(save_path, f"matrixA_size_{size}.txt")
         matrixB_path = os.path.join(save_path, f"matrixB_size_{size}.txt")
+        result_path = os.path.join(save_path, f"result_size_{size}.txt")
 
         matrixA = read_matrix_from_file(matrixA_path)
         matrixB = read_matrix_from_file(matrixB_path)
-
-        result_path = os.path.join(save_path, f"result_size_{size}.txt")
-        cpp_time = extract_execution_time(result_path)
+        cpp_result = read_matrix_from_file(result_path)
 
         start = time.time()
         python_result = np.dot(matrixA, matrixB)
         end = time.time()
         python_time = end - start
 
-        print(f"Matrix size: {size}x{size}")
-        print(f"C++ execution time: {cpp_time} seconds")
-        print(f"Python execution time: {python_time} seconds")
-        print("-" * 30)
+        if verify_results(cpp_result, python_result):
+            print(f"Verification for size {size}x{size}: PASSED")
+        else:
+            print(f"Verification for size {size}x{size}: FAILED")
 
-        plt.figure(figsize=(8, 6))
-        labels = ['C++', 'Python']
-        times = [cpp_time, python_time]
+        results.append((size, python_time))
 
-        plt.bar(labels, times, color=['blue', 'red'])
-        plt.xlabel('Implementation')
-        plt.ylabel('Execution Time (seconds)')
-        plt.title(f'Execution Time Comparison for {size}x{size} Matrices')
-        plt.grid(True)
+    # Запись времени выполнения Python в CSV
+    with open(os.path.join(save_path, "results.csv"), 'r') as file:
+        lines = list(csv.reader(file))
+    with open(os.path.join(save_path, "results.csv"), 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(lines[0])  # Заголовок
+        for i, (size, python_time) in enumerate(results):
+            writer.writerow([size, lines[i + 1][1], python_time])
 
-        histogram_path = os.path.join(save_path, f"histogram_size_{size}.png")
-        plt.savefig(histogram_path)
-        plt.close()
+    # Построение графика
+    sizes, cpp_times, python_times = [], [], []
+    with open(os.path.join(save_path, "results.csv"), 'r') as file:
+        reader = csv.reader(file)
+        next(reader)  # Пропуск заголовка
+        for row in reader:
+            sizes.append(int(row[0]))
+            cpp_times.append(float(row[1]))
+            python_times.append(float(row[2]))
 
-        print(f"Histogram saved to {histogram_path}")
+    plt.plot(sizes, cpp_times, label='C++', marker='o')
+    plt.plot(sizes, python_times, label='Python', marker='o')
+    plt.xlabel('Matrix Size')
+    plt.ylabel('Execution Time (seconds)')
+    plt.title('Execution Time vs Matrix Size')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(os.path.join(save_path, "execution_time_comparison.png"))
+    plt.show()
